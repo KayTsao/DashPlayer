@@ -49,10 +49,38 @@
 /*set to 1 if you want MPD to use SegmentTemplate if possible instead of SegmentList*/
 #define M3U8_TO_MPD_USE_TEMPLATE	0
 
-#define SIMULATION
 #define ROW 12
 #define COL 8
 #define LR_offset 6
+
+//#define SIMULATION
+//#define HORI_ROT
+
+#ifdef SIMULATION
+	#ifndef HORI_ROT
+		#define SKEW_ROT 
+	#endif
+
+	#ifdef SKEW_ROT
+		static float global_cam_dir_x = 0.707;
+		static float global_cam_dir_y = 0;
+		static float global_cam_dir_z = -0.707;
+		static float rot_axis_x = 0.707;
+		static float rot_axis_y = 0;
+		static float rot_axis_z = 0.707;
+	#endif
+	#ifdef HORI_ROT
+		static float global_cam_dir_x = 0;
+		static float global_cam_dir_y = 0;
+		static float global_cam_dir_z = -1;
+		static float rot_axis_x = 0;
+		static float rot_axis_y = 1;
+		static float rot_axis_z = 0;
+	#endif
+#endif
+
+static u32 latest_update_time=0;
+static u32 update_gap = 0;
 static s32 max_seg_index=0;
 static float Dir_Table[ROW * COL][3]=
 { 
@@ -4111,6 +4139,27 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 			gf_free(group);
 			return GF_OUT_OF_MEM;
 		}
+
+		//KK ADD CODE 为group中新增的direction变量赋值, 记录tile的中心方向 
+		{
+			int id,LROffset;
+			LROffset = COL;
+			GF_Vec dir;
+			if(i>LROffset)
+			{
+				id = i - LROffset -1;
+				if(id < ROW*COL){
+					dir.x = FLT2FIX(Dir_Table[id][0]);
+					dir.y = FLT2FIX(Dir_Table[id][1]);
+					dir.z = FLT2FIX(Dir_Table[id][2]);
+					gf_vec_norm(&dir);
+				}
+				else{
+					dir.x = 0; dir.y = 0; dir.z = -1;
+				}
+			}	
+			group->direction = dir; 
+		}		
 //增加group到list
 		e = gf_list_add(dash->groups, group);
 		if (e) {
@@ -4137,14 +4186,17 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 
 	for (i=0; i<count; i++) {
 		GF_DASH_Group *group = gf_list_get(dash->groups, i);
+		// 仅有dash->groups中的group[0]有groups_depending_on 列表, 里面包含其他group
 		if (group->groups_depending_on) {
 			u32 nb_dep_groups = gf_list_count(group->groups_depending_on);
 			//all dependent groups will be stored in the base group
 			group->max_cached_segments *= (1+nb_dep_groups);
 			group->max_buffer_segments *= (1+nb_dep_groups);
+//KK on 11th July 这里的cache和buffer大小需要大于一帧需要的所有tiles总数才行，否则无法播放，从315改成24从原来 播放第1秒下载第27秒变成　播放第1秒下载第15秒
+//printf("KK4148@max_cached_Segments = %u, group->max_buffer_segments=%u\n", group->max_cached_segments,group->max_buffer_segments);
+			//group->max_cached_segments = 24; group->max_buffer_segments = 24;
 			group->cached = gf_realloc(group->cached, sizeof(segment_cache_entry)*group->max_cached_segments);
 			memset(group->cached, 0, sizeof(segment_cache_entry)*group->max_cached_segments);
-
 			for (j=0; j<nb_dep_groups; j++) {
 				GF_DASH_Group *dep_group = gf_list_get(group->groups_depending_on, j);
 				dep_group->max_cached_segments = 0;
@@ -4798,25 +4850,6 @@ static GF_Err gf_dash_setup_period(GF_DashClient *dash)
 		Bool active_rep_found;
 
 		active_rep = 0;
-//KK ADD CODE
-int i, LROffset;
-LROffset = COL;
-GF_Vec dir;
-if(group_i>=LROffset)
-{
-	i = (int)group_i - LROffset;
-	if(i < ROW*COL){
-		dir.x = FLT2FIX(Dir_Table[i][0]);
-		dir.y = FLT2FIX(Dir_Table[i][1]);
-		dir.z = FLT2FIX(Dir_Table[i][2]);
-		gf_vec_norm(&dir);
-	}
-	else{
-		dir.x = 0; dir.y = 0; dir.z = -1;
-	}
-}
-group->direction = dir; 
-printf("Dir%d[%f, %f, %f]\n", group_i, (float)group->direction.x, (float)group->direction.y, (float)group->direction.z);
 	
 		if ((dash->debug_group_index>=0) && (group_i != (u32) dash->debug_group_index)) {
 			group->selection = GF_DASH_GROUP_NOT_SELECTABLE;
@@ -5644,6 +5677,7 @@ static DownloadGroupStatus dash_download_group_download(GF_DashClient *dash, GF_
 				cache_entry->end_range = end_range;
 			}
 			GF_LOG(GF_LOG_DEBUG, GF_LOG_DASH, ("[DASH] Added file to cache (%u/%u in cache): %s\n", base_group->nb_cached_segments+1, base_group->max_cached_segments, cache_entry->url));
+//printf("Added file to cache (%u/%u in cache): %s\n", base_group->nb_cached_segments+1, base_group->max_cached_segments, cache_entry->url);
 
 			base_group->nb_cached_segments++;
 			gf_dash_update_buffering(group, dash);
@@ -5689,60 +5723,44 @@ static DownloadGroupStatus dash_download_group_download(GF_DashClient *dash, GF_
 	if (e) return GF_DASH_DownloadCancel;
 	return GF_DASH_DownloadSuccess;
 }
-static float global_cam_dir_x = 0.707;//0;//0.707;
-static float global_cam_dir_y = 0;
-static float global_cam_dir_z = -0.707;//-1;//-0.707;
 
 //KK ADD CODE
 //仿真：用来实现生成自转的cam_dir的功能
-static generate_cam_dir(){
-	GF_Vec cam_dir, rot_axis, new_cam_dir;
+#ifdef SIMULATION
+static void generate_cam_dir(){
+	GF_Vec cam_dir, axis, new_cam_dir;
 	GF_Vec4 Quat;
-
-	rot_axis.x = 0.707;//0;
-	rot_axis.y = 0;//1;
-	rot_axis.z = 0.707;//0;
 	
 	cam_dir.x = global_cam_dir_x;
 	cam_dir.y = global_cam_dir_y;
 	cam_dir.z = global_cam_dir_z;
-	gf_vec_norm(&cam_dir);
-	//沿着y轴转30度每次
-	//Quat = gf_quat_from_axis_cos(rot_axis, FLT2FIX(0.866));
-	//沿着y轴转30度每次
-	Quat = gf_quat_from_axis_cos(rot_axis, FLT2FIX(0.707));
-	
-
+	axis.x = rot_axis_x;
+	axis.y = rot_axis_y;
+	axis.z = rot_axis_z;
+	//沿轴转30度每次
+	//Quat = gf_quat_from_axis_cos(axis, FLT2FIX(0.866));
+	//沿轴转45度每次
+	Quat = gf_quat_from_axis_cos(axis, FLT2FIX(0.707));
 	new_cam_dir = gf_quat_rotate(&Quat, &cam_dir);
 	gf_vec_norm(&new_cam_dir);
 	
 	global_cam_dir_x = new_cam_dir.x;
 	global_cam_dir_y = new_cam_dir.y;
 	global_cam_dir_z = new_cam_dir.z;
-printf("KK@L5691 cam_dir:%f %f %f\n", (float)new_cam_dir.x, (float)new_cam_dir.y, (float)new_cam_dir.z);	
 
+	printf("KK@L5691 cam_dir:%f %f %f\n", (float)new_cam_dir.x, (float)new_cam_dir.y, (float)new_cam_dir.z);	
 }
+#endif
 //用于检测当前tile是否在active region内
-static Bool is_active_tile(GF_DASH_Group *group, int idx)
+static Bool is_active_tile(GF_DASH_Group *dep_group, int idx)
 {
 	//download all LR tiles
 	if(idx < LR_offset)
 		return GF_TRUE;
-	//don't download empty tiles
-	int i = idx - COL;
-	if(i < 0)
+	//Ignore empty tiles
+	int i = idx - COL ;
+	if(i < 0 || i>=ROW*COL)
 		return GF_FALSE;
-	
-	GF_Vec dir;
-	if(i < ROW*COL){
-		dir.x = FLT2FIX(Dir_Table[i][0]);
-		dir.y = FLT2FIX(Dir_Table[i][1]);
-		dir.z = FLT2FIX(Dir_Table[i][2]);
-		gf_vec_norm(&dir);
-	}
-	else{
-		dir.x = 0; dir.y = 0; dir.z = -1;
-	}
 	
 	GF_Vec cam_dir;
 #ifdef SIMULATION
@@ -5752,8 +5770,9 @@ static Bool is_active_tile(GF_DASH_Group *group, int idx)
 #else
 	gf_mo_get_VPInfo(&cam_dir);
 #endif
-	float sinTheta = gf_vec_dot(dir, cam_dir);
-	if( sinTheta>0.707)//0.25)//0.707 )
+	
+	float sinTheta = gf_vec_dot(dep_group->direction, cam_dir);
+	if( sinTheta>0.707)//0.25)
 		return GF_TRUE;
 	else
 		return GF_FALSE;
@@ -5774,19 +5793,23 @@ static DownloadGroupStatus dash_download_group(GF_DashClient *dash, GF_DASH_Grou
 		u32 i, count = gf_list_count(group->groups_depending_on);
 		i = group->current_dep_idx - 1;
 		for (; i<count; i++) {
+			GF_DASH_Group *dep_group = gf_list_get(group->groups_depending_on, i);
+
 //*******************************KK ADD CODE ***
-			// Record the latest segment_index. Use Tile#0 since the 1st tile is compulsory.
-			if(i == 0)
-				max_seg_index=group->download_segment_index;
+			// Record the latest segment_index. Use group#0 since the 1st one is compulsory.
+			if(i == 0){
+				//max_seg_index=group->download_segment_index;
+				//update_gap =(u32)group->current_downloaded_segment_duration;
+			}
 			//Eliminate the inactive regions		
 			if(i !=0 && i!=count-1)
 			{
-				if(!is_active_tile(group, i)) 
+				if(!is_active_tile(dep_group, i)) 
 					continue;
 			}
+			// group->download_segment_index = max_seg_index; //make no difference 
 //*******************************KK CODE END ***
 
-			GF_DASH_Group *dep_group = gf_list_get(group->groups_depending_on, i);
 			if ((i+1==count) && !dep_group->groups_depending_on)
 				has_dep_following = GF_FALSE;
 
@@ -6053,7 +6076,6 @@ static u32 dash_download_threaded(void *par)
 	group->download_th_done = GF_TRUE;
 	return 0;
 }
-
 static u32 dash_main_thread_proc(void *par)
 {
 	GF_Err e;
@@ -6144,19 +6166,32 @@ restart_period:
 	dash->dash_state = GF_DASH_STATE_RUNNING;
 	gf_mx_v(dash->dash_mutex);
 
-//KK BookMark
 	dash->min_wait_ms_before_next_request = 0;
+
+//KK BookMark 下面进入线程的主循环
 	while (go_on) {
 		Bool has_postponed_rate_adaptation = GF_FALSE;
 
-//KK ADD CODE:
+//************************KK ADD CODE**************************************
+	//控制下载频率    当前时间与最后一次更新时间之差，若大于随后一次更新的segment duration则进行更新，并记录最后一次更新的时间	
+	u32 time = gf_sys_clock();
+	if( time - latest_update_time < update_gap)
+		continue;
+	else
+		latest_update_time = time;
+	//生成FOV角度
 #ifdef SIMULATION
-generate_cam_dir();
+	generate_cam_dir();
 #endif
+	//按照group0设置Latest segment idx　和主循环等待时间
+	GF_DASH_Group *group0 = gf_list_get(dash->groups, 0);
+	max_seg_index = group0->download_segment_index;
+	update_gap = (u32) group0->current_downloaded_segment_duration;
+//************************KK ADD CODE END**************************************
+		
 		/*wait until next segment is needed*/
 		while (!dash->mpd_stop_request) {
 			u32 timer = gf_sys_clock() - dash->last_update_time;
-
 			/*refresh MPD*/
 			if (dash->force_mpd_update || (dash->mpd->minimum_update_period && (timer > dash->mpd->minimum_update_period))) {
 				u32 diff = gf_sys_clock();
@@ -6300,7 +6335,8 @@ generate_cam_dir();
 				continue;
 			}
 
-			if (group->depend_on_group) continue;
+			if (group->depend_on_group)
+				continue;
 			//not yet scheduled for download
 			if (group->rate_adaptation_postponed) {
 				group->download_th_done = GF_TRUE;
@@ -6315,6 +6351,7 @@ generate_cam_dir();
 					group->download_th_done = GF_TRUE;
 				}
 			} else {
+//默认流程在这里调用下载
 				DownloadGroupStatus res;
 				group->download_th_done = GF_FALSE;
 				res = dash_download_group(dash, group, group, group->groups_depending_on ? GF_TRUE : GF_FALSE);
@@ -6323,7 +6360,6 @@ generate_cam_dir();
 					continue;
 				}
 				group->download_th_done = GF_TRUE;
-printf("KK@#L6324 max_seg_index:%d\n", max_seg_index);
 			}
 		}
 
