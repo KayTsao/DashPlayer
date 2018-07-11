@@ -53,8 +53,8 @@
 #define COL 8
 #define LR_offset 6
 
-//#define SIMULATION
-//#define HORI_ROT
+#define SIMULATION
+#define HORI_ROT
 
 #ifdef SIMULATION
 	#ifndef HORI_ROT
@@ -5524,9 +5524,6 @@ static DownloadGroupStatus dash_download_group_download(GF_DashClient *dash, GF_
 	}
 
 	/* At this stage, there are some segments left to be downloaded */
-//KK ADD CODE
-//让要下载的segment_index与global的max_seg_index即当前播放的最新时间段同步(解决全局tiles之间不同步的问题)
-	group->download_segment_index = max_seg_index; 
 	e = gf_dash_resolve_url(dash->mpd, rep, group, dash->base_url, GF_MPD_RESOLVE_URL_MEDIA, group->download_segment_index, &new_base_seg_url, &start_range, &end_range, &group->current_downloaded_segment_duration, NULL, &key_url, &key_iv, NULL);
 
 	if (e || !new_base_seg_url) {
@@ -5796,18 +5793,14 @@ static DownloadGroupStatus dash_download_group(GF_DashClient *dash, GF_DASH_Grou
 			GF_DASH_Group *dep_group = gf_list_get(group->groups_depending_on, i);
 
 //*******************************KK ADD CODE ***
-			// Record the latest segment_index. Use group#0 since the 1st one is compulsory.
-			if(i == 0){
-				//max_seg_index=group->download_segment_index;
-				//update_gap =(u32)group->current_downloaded_segment_duration;
-			}
 			//Eliminate the inactive regions		
 			if(i !=0 && i!=count-1)
 			{
 				if(!is_active_tile(dep_group, i)) 
 					continue;
 			}
-			// group->download_segment_index = max_seg_index; //make no difference 
+			//让要下载的segment_index与global的max_seg_index即当前播放的最新时间段同步(解决全局tiles之间不同步的问题)
+			dep_group->download_segment_index = max_seg_index;  
 //*******************************KK CODE END ***
 
 			if ((i+1==count) && !dep_group->groups_depending_on)
