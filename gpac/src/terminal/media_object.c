@@ -34,7 +34,9 @@
 #include <gpac/nodes_svg.h>
 #include <gpac/network.h>
 
-
+//****************************************KK ADD CODE HERE**************************************
+static GF_ViewPortInfo VPInfo;
+//****************************************KK ADD CODE END**************************************
 #ifndef GPAC_DISABLE_SVG
 static GF_MediaObject *get_sync_reference(GF_Scene *scene, XMLRI *iri, u32 o_type, GF_Node *orig_ref, Bool *post_pone)
 {
@@ -202,6 +204,7 @@ void gf_mo_unregister(GF_Node *node, GF_MediaObject *mo)
 
 GF_MediaObject *gf_mo_new()
 {
+//printf("KK@media_object.c #L205\n");
 	GF_MediaObject *mo;
 	mo = (GF_MediaObject *) gf_malloc(sizeof(GF_MediaObject));
 	memset(mo, 0, sizeof(GF_MediaObject));
@@ -1569,6 +1572,7 @@ Bool gf_mo_get_srd_info(GF_MediaObject *mo, GF_MediaObjectVRInfo *vr_info)
 /*sets quality hint for this media object  - quality_rank is between 0 (min quality) and 100 (max quality)*/
 void gf_mo_hint_quality_degradation(GF_MediaObject *mo, u32 quality_degradation)
 {
+printf("KK@media_object.c #L1572\n");	
 	if (!gf_odm_lock_mo(mo)) return;
 	if (!mo->odm || !mo->odm->codec) {
 		gf_odm_lock(mo->odm, 0);
@@ -1590,7 +1594,6 @@ void gf_mo_hint_quality_degradation(GF_MediaObject *mo, u32 quality_degradation)
 
 void gf_mo_hint_visible_rect(GF_MediaObject *mo, u32 min_x, u32 max_x, u32 min_y, u32 max_y)
 {
-	
 	if (!gf_odm_lock_mo(mo)) return;
 	if (!mo->odm || !mo->odm->codec) {
 		gf_odm_lock(mo->odm, 0);
@@ -1615,6 +1618,25 @@ void gf_mo_hint_visible_rect(GF_MediaObject *mo, u32 min_x, u32 max_x, u32 min_y
 	
 	gf_odm_lock(mo->odm, 0);
 }
+//****************************************KK ADD CODE HERE**************************************
+//void gf_mo_set_VPInfo(float targetX, float targetY, float targetZ)
+void gf_mo_set_VPInfo(GF_Vec target_dir)
+{
+	VPInfo.cam_dir = target_dir;
+	//VPInfo.cam_dir_x = targetX;
+	//VPInfo.cam_dir_y = targetY;
+	//VPInfo.cam_dir_z = targetZ;
+	return;
 
-
+}
+//void gf_mo_get_VPInfo(float*x, float*y, float*z)
+void gf_mo_get_VPInfo(GF_Vec *target)
+{
+	*target = VPInfo.cam_dir;
+	//*x = VPInfo.cam_dir_x;
+	//*y = VPInfo.cam_dir_y;
+	//*z = VPInfo.cam_dir_z;
+	return;
+}
+//****************************************KK ADD CODE END**************************************
 

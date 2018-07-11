@@ -1792,7 +1792,11 @@ u32 gf_term_get_time_in_ms(GF_Terminal *term)
 	if (term->root_scene->scene_codec && term->root_scene->scene_codec->ck) ck = term->root_scene->scene_codec->ck;
 	else if (term->root_scene->dyn_ck) ck = term->root_scene->dyn_ck;
 	if (!ck) return 0;
-	return gf_clock_media_time(ck);
+	
+	u32 t;
+	t = gf_clock_media_time(ck);
+	//printf("KK@terminal.c#L1798  play time:%d\n", t);
+	return t;//gf_clock_media_time(ck);
 }
 
 GF_EXPORT

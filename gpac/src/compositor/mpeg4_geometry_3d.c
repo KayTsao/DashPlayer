@@ -155,7 +155,6 @@ static void get_tx_coords_from_angle(GF_TraverseState *tr_state, GF_TextureHandl
 	} else {
 		hfov = tr_state->camera->fieldOfView/2;
 	}
-
 	angle_start = theta_angle - hfov;
 	angle_end = theta_angle + hfov;
 
@@ -200,6 +199,13 @@ static void TraverseSphere(GF_Node *n, void *rs, Bool is_destroy)
 		GF_MediaObjectVRInfo vrinfo;
 		u32 min_x, max_x, min_y, max_y;
 		GF_TextureHandler *txh = gf_sc_texture_get_handler( ((M_Appearance *) tr_state->appear)->texture );
+
+//************************KK ADD CODE HERE****************************	
+GF_Vec target;
+target = camera_get_target_dir(tr_state->camera);
+//gf_mo_set_VPInfo(target.x, target.y, target.z);
+gf_mo_set_VPInfo(target);
+//************************KK ADD CODE END****************************	
 		
 		if (!txh || !txh->stream) return;
 		

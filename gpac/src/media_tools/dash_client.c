@@ -32,7 +32,7 @@
 #include <gpac/base_coding.h>
 #include <string.h>
 #include <sys/stat.h>
-
+#include <gpac/mediaobject.h>
 #ifdef _WIN32_WCE
 #include <winbase.h>
 #else
@@ -41,7 +41,6 @@
 
 #include <math.h>
 
-
 #ifndef GPAC_DISABLE_DASH_CLIENT
 
 /*ISO 639 languages*/
@@ -49,6 +48,71 @@
 
 /*set to 1 if you want MPD to use SegmentTemplate if possible instead of SegmentList*/
 #define M3U8_TO_MPD_USE_TEMPLATE	0
+
+#define SIMULATION
+#define ROW 12
+#define COL 8
+#define LR_offset 6
+static s32 max_seg_index=0;
+static float Dir_Table[ROW * COL][3]=
+{ 
+/* //sphere alike
+// ******************Front-Dwn
+{-0.375, 0.375,-0.625}, {-0.125, 0.375,-0.625}, {0.125, 0.375,-0.625}, {0.375, 0.375,-0.625},{-0.375,-0.625,-0.375}, {-0.125,-0.625,-0.375}, {0.125,-0.625,-0.375}, {0.375,-0.625,-0.375},
+
+{-0.375, 0.125,-0.625}, {-0.125, 0.125,-0.875}, {0.125, 0.125,-0.875}, {0.375, 0.125,-0.625},{-0.375,-0.625,-0.125}, {-0.125,-0.875,-0.125}, {0.125,-0.875,-0.125}, {0.375,-0.625,-0.125},
+
+{-0.375,-0.125,-0.625}, {-0.125,-0.125,-0.875}, {0.125,-0.125,-0.875}, {0.375,-0.125,-0.625},{-0.375,-0.625, 0.125}, {-0.125,-0.875, 0.125}, {0.125,-0.875, 0.125}, {0.375,-0.625, 0.125},
+
+{-0.375,-0.375,-0.625}, {-0.125,-0.375,-0.625}, {0.125,-0.375,-0.625}, {0.375,-0.375,-0.625},{-0.375,-0.625, 0.375}, {-0.125,-0.625, 0.375}, {0.125,-0.625, 0.375}, {0.375,-0.625, 0.375},
+// ******************Right-Back
+{0.625, 0.375,-0.375}, {0.625, 0.375,-0.125}, {0.625,  0.375,0.125}, { 0.625, 0.375,0.375}, {0.375, 0.375, 0.625}, {0.125, 0.375, 0.625}, {-0.125, 0.375,0.625}, {-0.375, 0.375,0.625},
+
+{0.625, 0.125,-0.375}, {0.875, 0.125,-0.125}, {0.875,  0.125,0.125}, { 0.625, 0.125,0.375}, {0.375, 0.125, 0.625}, {0.125, 0.125, 0.875}, {-0.125, 0.125,0.875}, {-0.375, 0.125,0.625},
+
+{0.625,-0.125,-0.375}, {0.875,-0.125,-0.125}, {0.875, -0.125,0.125}, { 0.625,-0.125,0.375}, {0.375,-0.125, 0.625}, {0.125,-0.125, 0.875}, {-0.125,-0.125,0.875}, {-0.375,-0.125,0.625},
+
+{0.625,-0.375,-0.375}, {0.625,-0.375,-0.125}, {0.625, -0.375,0.125}, { 0.625,-0.375,0.375}, {0.375,-0.375, 0.625}, {0.125,-0.375, 0.625}, {-0.125,-0.375,0.625}, {-0.375,-0.375,0.625},
+
+// ******************Left-Up
+{-0.625, 0.375,	0.375}, {-0.625, 0.375, 0.125}, {-0.625, 0.375,-0.125}, {-0.625, 0.375,-0.375},{-0.375, 0.625, 0.375}, {-0.125, 0.625, 0.375}, { 0.125, 0.625, 0.375}, { 0.375, 0.625, 0.375},
+
+{-0.625, 0.125,	0.375}, {-0.875, 0.125, 0.125}, {-0.875, 0.125,-0.125}, {-0.625, 0.125,-0.375},{-0.375, 0.625, 0.125}, {-0.125, 0.875,	0.125}, { 0.125, 0.875, 0.125}, { 0.375, 0.625, 0.125},
+
+{-0.625,-0.125,	0.375}, {-0.875,-0.125, 0.125}, {-0.875,-0.125,-0.125}, {-0.625,-0.125,-0.375},{-0.375, 0.625,-0.125}, {-0.125, 0.875,-0.125}, { 0.125, 0.875,-0.125}, { 0.375, 0.625,-0.125},
+
+{-0.625,-0.375,	0.375}, {-0.625,-0.375, 0.125}, {-0.625,-0.375,-0.125}, {-0.625,-0.375,-0.375},{-0.375, 0.625,-0.375}, {-0.125, 0.625,-0.375}, { 0.125, 0.625,-0.375}, { 0.375, 0.625,-0.375},
+
+*/
+// cube alike
+//******************Front-Dwn
+{-0.375, 0.375,-0.625}, {-0.125, 0.375,-0.875}, {0.125, 0.375,-0.875}, {0.375, 0.375,-0.625},{-0.375,-0.625,-0.375}, {-0.125,-0.625,-0.375}, {0.125,-0.625,-0.375}, {0.375,-0.625,-0.375},
+
+{-0.375, 0.125,-0.625}, {-0.125, 0.125,-0.875}, {0.125, 0.125,-0.875}, {0.375, 0.125,-0.625},{-0.375,-0.625,-0.125}, {-0.125,-0.875,-0.125}, {0.125,-0.875,-0.125}, {0.375,-0.625,-0.125},
+
+{-0.375,-0.125,-0.625}, {-0.125,-0.125,-0.875}, {0.125,-0.125,-0.875}, {0.375,-0.125,-0.625},{-0.375,-0.625, 0.125}, {-0.125,-0.875, 0.125}, {0.125,-0.875, 0.125}, {0.375,-0.625, 0.125},
+
+{-0.375,-0.375,-0.625}, {-0.125,-0.375,-0.875}, {0.125,-0.375,-0.875}, {0.375,-0.375,-0.625},{-0.375,-0.625, 0.375}, {-0.125,-0.625, 0.375}, {0.125,-0.625, 0.375}, {0.375,-0.625, 0.375},
+//******************Right-Back
+{0.625, 0.375,-0.375}, {0.875, 0.375,-0.125}, {0.875,  0.375,0.125}, { 0.625, 0.375,0.375}, {0.375, 0.375, 0.625}, {0.125, 0.375, 0.875}, {-0.125, 0.375,0.875}, {-0.375, 0.375,0.625},
+
+{0.625, 0.125,-0.375}, {0.875, 0.125,-0.125}, {0.875,  0.125,0.125}, { 0.625, 0.125,0.375}, {0.375, 0.125, 0.625}, {0.125, 0.125, 0.875}, {-0.125, 0.125,0.875}, {-0.375, 0.125,0.625},
+
+{0.625,-0.125,-0.375}, {0.875,-0.125,-0.125}, {0.875, -0.125,0.125}, { 0.625,-0.125,0.375}, {0.375,-0.125, 0.625}, {0.125,-0.125, 0.875}, {-0.125,-0.125,0.875}, {-0.375,-0.125,0.625},
+
+{0.625,-0.375,-0.375}, {0.875,-0.375,-0.125}, {0.875, -0.375,0.125}, { 0.625,-0.375,0.375}, {0.375,-0.375, 0.625}, {0.125,-0.375, 0.875}, {-0.125,-0.375,0.875}, {-0.375,-0.375,0.625},
+
+//******************Left-Up
+{-0.625, 0.375,	0.375}, {-0.875, 0.375, 0.125}, {-0.875, 0.375,-0.125}, {-0.625, 0.375,-0.375},{-0.375, 0.625, 0.375}, {-0.125, 0.625, 0.375}, { 0.125, 0.625, 0.375}, { 0.375, 0.625, 0.375},
+
+{-0.625, 0.125,	0.375}, {-0.875, 0.125, 0.125}, {-0.875, 0.125,-0.125}, {-0.625, 0.125,-0.375},{-0.375, 0.625, 0.125}, {-0.125, 0.875, 0.125}, { 0.125, 0.875, 0.125}, { 0.375, 0.625, 0.125},
+
+{-0.625,-0.125,	0.375}, {-0.875,-0.125, 0.125}, {-0.875,-0.125,-0.125}, {-0.625,-0.125,-0.375},{-0.375, 0.625,-0.125}, {-0.125, 0.875,-0.125}, { 0.125, 0.875,-0.125}, { 0.375, 0.625,-0.125},
+
+{-0.625,-0.375,	0.375}, {-0.875,-0.375, 0.125}, {-0.875,-0.375,-0.125}, {-0.625,-0.375,-0.375},{-0.375, 0.625,-0.375}, {-0.125, 0.625,-0.375}, { 0.125, 0.625,-0.375}, { 0.375, 0.625,-0.375},
+
+};
+
 
 typedef enum {
 	GF_DASH_STATE_STOPPED = 0,
@@ -293,7 +357,7 @@ struct __dash_group
 	/* base representation index of this group plus one, or 0 if all representations in this group are independent*/
 	u32 base_rep_index_plus_one;
 
-	/* maximum representation index we want to download*/
+	/* maximum representation index we want to download*/ //KK just the group index itself
 	u32 max_complementary_rep_index;
 	//start time and timescales of currently downloaded segment
 	u64 current_start_time;
@@ -341,6 +405,9 @@ struct __dash_group
 
 	/* current segment index in BBA and BOLA algorithm */
 	u32 current_index;
+//KK ADD CODE
+	GF_Vec direction;
+
 };
 
 struct _dash_srd_desc
@@ -348,6 +415,7 @@ struct _dash_srd_desc
 	u32 srd_nb_rows, srd_nb_cols;
 	u32 id, width, height, srd_fw, srd_fh;
 };
+
 
 void drm_decrypt(unsigned char * data, unsigned long dataSize, const char * decryptMethod, const char * keyfileURL, const unsigned char * keyIV);
 
@@ -483,7 +551,7 @@ Bool gf_dash_check_mpd_root_type(const char *local_url)
 
 
 static void gf_dash_group_timeline_setup(GF_MPD *mpd, GF_DASH_Group *group, u64 fetch_time)
-{
+{// KK Called by each group at the initial procedure
 	GF_MPD_SegmentTimeline *timeline = NULL;
 	GF_MPD_Representation *rep = NULL;
 	const char *val;
@@ -1013,7 +1081,7 @@ GF_Err gf_dash_download_resource(GF_DashClient *dash, GF_DASHFileIOSession *sess
 	Bool retry = GF_TRUE;
 	GF_Err e;
 	GF_DASHFileIO *dash_io = dash->dash_io;
-
+printf("KK@#1054 Downloading %s\n", url);
 	GF_LOG(GF_LOG_DEBUG, GF_LOG_DASH, ("[DASH] Downloading %s starting at UTC "LLU" ms\n", url, gf_net_get_utc() ));
 
 	if (group) {
@@ -2652,7 +2720,6 @@ static s32 dash_do_rate_adaptation_legacy_rate(GF_DashClient *dash, GF_DASH_Grou
 	Bool do_switch;
 	GF_MPD_Representation *new_rep;
 	s32 new_index = group->active_rep_index;
-
 	/* records the number of representations between the current one and the next chosen one */
 	u32 nb_inter_rep = 0;
 
@@ -3242,9 +3309,7 @@ static void dash_do_rate_adaptation(GF_DashClient *dash, GF_DASH_Group *group)
 	*/
 	new_index = group->active_rep_index;
 	if (dash->rate_adaptation_algo) {
-		new_index = dash->rate_adaptation_algo(dash, group, base_group,
-														  dl_rate, speed, max_available_speed, force_lower_complexity,
-														  rep, GF_FALSE);
+		new_index = dash->rate_adaptation_algo(dash, group, base_group, dl_rate, speed, max_available_speed, force_lower_complexity, rep, GF_FALSE);
 	}
 
 	if (new_index==-1) {
@@ -3843,7 +3908,6 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 
 	period = gf_list_get(dash->mpd->periods, dash->active_period_index);
 	if (!period) return GF_BAD_PARAM;
-
 	count = gf_list_count(period->adaptation_sets);
 	for (i=0; i<count; i++) {
 		Double seg_dur;
@@ -3851,6 +3915,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 		Bool found = GF_FALSE;
 		Bool has_dependent_representations = GF_FALSE;
 		GF_MPD_AdaptationSet *set = gf_list_get(period->adaptation_sets, i);
+//KK: 这里为什么还要遍历一下现有的groups？
 		for (j=0; j<gf_list_count(dash->groups); j++) {
 			GF_DASH_Group *group = gf_list_get(dash->groups, j);
 			if (group->adaptation_set==set) {
@@ -3860,25 +3925,23 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 		}
 
 		if (found) continue;
-
 		if (! gf_list_count(set->representations)) {
 			GF_LOG(GF_LOG_WARNING, GF_LOG_DASH, ("[DASH] Empty adaptation set found (ID %s) - ignoring\n", set->id));
 			continue;
 		}
 
-
 		GF_SAFEALLOC(group, GF_DASH_Group);
 		if (!group) return GF_OUT_OF_MEM;
+//开始给新建的grouop赋值
 		group->dash = dash;
 		group->adaptation_set = set;
 		group->period = period;
-		if (dash->use_threaded_download)
+		if (dash->use_threaded_download)	//默认没有使用线程下载
 			group->download_th = gf_th_new("DashGroupDownload");
 
 		group->cache_mutex = gf_mx_new("DashGroupMutex");
 
-		group->bitstream_switching = (set->bitstream_switching || period->bitstream_switching) ? GF_TRUE : GF_FALSE;
-
+		group->bitstream_switching = (set->bitstream_switching || period->bitstream_switching) ? GF_TRUE : GF_FALSE;//默认为true
 		seg_dur = 0;
 		nb_dependant_rep = 0;
 		for (j=0; j<gf_list_count(set->representations); j++) {
@@ -3886,14 +3949,17 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 			u32 nb_seg, k;
 			Bool cp_supported;
 			GF_MPD_Representation *rep = gf_list_get(set->representations, j);
+			//KK 获得一个rep中的segment时长和总个数
 			gf_dash_get_segment_duration(rep, set, period, dash->mpd, &nb_seg, &dur);
 			if (dur>seg_dur) seg_dur = dur;
 
+			//KK 不满足后者？？
 			if (group->bitstream_switching && (set->segment_base || period->segment_base || rep->segment_base) ) {
 				group->bitstream_switching = GF_FALSE;
 				GF_LOG(GF_LOG_WARNING, GF_LOG_DASH, ("[DASH] bitstreamSwitching set for onDemand content - ignoring flag\n"));
 			}
 
+			//KK 不满足
 			if (dash->dash_io->dash_codec_supported) {
 				Bool res = dash->dash_io->dash_codec_supported(dash->dash_io, rep->codecs, rep->width, rep->height, (rep->scan_type==GF_MPD_SCANTYPE_INTERLACED) ? 1 : 0, rep->framerate ? rep->framerate->num : 0, rep->framerate ? rep->framerate->den : 0, rep->samplerate);
 				if (!res) {
@@ -3902,7 +3968,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 					continue;
 				}
 			}
-			//filter out everything above HD
+			//filter out everything above HD　KK不满足
 			if ((dash->max_width>2000) && (dash->max_height>2000)) {
 				if ((rep->width>dash->max_width) || (rep->height>dash->max_height)) {
 					GF_LOG(GF_LOG_WARNING, GF_LOG_DASH, ("[DASH] Representation size %dx%d exceeds max display size allowed %dx%d - ignoring\n", rep->width, rep->height, dash->max_width, dash->max_height));
@@ -3910,7 +3976,8 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 					continue;
 				}
 			}
-			if (rep->codecs && (dash->max_bit_per_pixel > 8) ) {
+			//KK 不满足后者
+			if (rep->codecs && (dash->max_bit_per_pixel > 8) ) {	
 				char *vid_type = strstr(rep->codecs, "hvc");
 				if (!vid_type) vid_type = strstr(rep->codecs, "hev");
 				if (!vid_type) vid_type = strstr(rep->codecs, "avc");
@@ -3942,7 +4009,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 					}
 				}
 			}
-
+			//KK 个数为０，不进入循环
 			for (k=0; k<gf_list_count(rep->essential_properties); k++) {
 				GF_MPD_Descriptor *mpd_desc = gf_list_get(rep->essential_properties, k);
 
@@ -3958,6 +4025,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 			}
 
 			cp_supported = 1;
+			//KK 个数为０，不进入循环
 			for (k=0; k<gf_list_count(rep->content_protection); k++) {
 				GF_MPD_Descriptor *mpd_desc = gf_list_get(rep->content_protection, k);
 				//we don't know any defined scheme for now
@@ -3985,6 +4053,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 			else
 				group->base_rep_index_plus_one = j+1;
 			rep->playback.enhancement_rep_index_plus_one = 0;
+			//KK 不满足if条件　（是那种分basic和enhance的传输协议？才有dependency之类的？）
 			for (k = 0; k < gf_list_count(set->representations); k++) {
 				GF_MPD_Representation *a_rep = gf_list_get(set->representations, k);
 				if (a_rep->dependency_id) {
@@ -4002,7 +4071,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 			if (!rep->playback.disabled && rep->dependency_id)
 				nb_dependant_rep++;
 		}
-
+//KK END OF FOR LOOP of   j (representations in group)
 		if (!seg_dur && !dash->is_m3u8) {
 			GF_LOG(GF_LOG_WARNING, GF_LOG_DASH, ("[DASH] Cannot compute default segment duration\n"));
 		}
@@ -4016,7 +4085,6 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 		if (seg_dur) {
 			while (group->max_cached_segments * seg_dur * 1000 < group->cache_duration)
 				group->max_cached_segments ++;
-
 			group->max_buffer_segments = group->max_cached_segments;
 
 #if 0
@@ -4030,7 +4098,6 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 			group->max_cached_segments *= (nb_dependant_rep+1);
 			group->max_buffer_segments *= (nb_dependant_rep+1);
 		}
-
 		if (!has_dependent_representations)
 			group->base_rep_index_plus_one = 0; // all representations in this group are independent
 
@@ -4044,6 +4111,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 			gf_free(group);
 			return GF_OUT_OF_MEM;
 		}
+//增加group到list
 		e = gf_list_add(dash->groups, group);
 		if (e) {
 			gf_free(group->cached);
@@ -4051,8 +4119,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 			return e;
 		}
 	}
-
-
+// END of FOR LOOP i(adaptation_sets)
 	count = gf_list_count(dash->groups);
 	for (i=0; i<count; i++) {
 		GF_DASH_Group *group = gf_list_get(dash->groups, i);
@@ -4080,17 +4147,13 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 
 			for (j=0; j<nb_dep_groups; j++) {
 				GF_DASH_Group *dep_group = gf_list_get(group->groups_depending_on, j);
-
 				dep_group->max_cached_segments = 0;
-
 				/* the rest of the code assumes that at least group->cached[0] is allocated */
 				dep_group->cached = gf_realloc(dep_group->cached, sizeof(segment_cache_entry));
 				memset(dep_group->cached, 0, sizeof(segment_cache_entry));
-
 			}
 		}
 	}
-
 	return GF_OK;
 }
 
@@ -4735,7 +4798,26 @@ static GF_Err gf_dash_setup_period(GF_DashClient *dash)
 		Bool active_rep_found;
 
 		active_rep = 0;
-
+//KK ADD CODE
+int i, LROffset;
+LROffset = COL;
+GF_Vec dir;
+if(group_i>=LROffset)
+{
+	i = (int)group_i - LROffset;
+	if(i < ROW*COL){
+		dir.x = FLT2FIX(Dir_Table[i][0]);
+		dir.y = FLT2FIX(Dir_Table[i][1]);
+		dir.z = FLT2FIX(Dir_Table[i][2]);
+		gf_vec_norm(&dir);
+	}
+	else{
+		dir.x = 0; dir.y = 0; dir.z = -1;
+	}
+}
+group->direction = dir; 
+printf("Dir%d[%f, %f, %f]\n", group_i, (float)group->direction.x, (float)group->direction.y, (float)group->direction.z);
+	
 		if ((dash->debug_group_index>=0) && (group_i != (u32) dash->debug_group_index)) {
 			group->selection = GF_DASH_GROUP_NOT_SELECTABLE;
 			continue;
@@ -4763,7 +4845,7 @@ static GF_Err gf_dash_setup_period(GF_DashClient *dash)
 			GF_LOG(GF_LOG_WARNING, GF_LOG_DASH, ("[DASH] AdaptationSet with xlink:href to %s - ignoring because not supported\n", group->adaptation_set->xlink_href));
 			continue;
 		}
-
+		//KK essential_prop为０，不走循环
 		for (j=0; j<gf_list_count(group->adaptation_set->essential_properties); j++) {
 			GF_MPD_Descriptor *mpd_desc = gf_list_get(group->adaptation_set->essential_properties, j);
 			if (!strcmp(mpd_desc->scheme_id_uri, "urn:mpeg:dash:srd:2014")) {
@@ -4834,7 +4916,7 @@ static GF_Err gf_dash_setup_period(GF_DashClient *dash)
 			GF_MPD_Representation *rep = gf_list_get(group->adaptation_set->representations, rep_i);
 			if (rep->width && rep->height) group_has_video = GF_TRUE;
 		}
-
+//KK 注释掉原程序中按升序排列representation的代码
 		//sort by ascending bandwidth and quality
 		for (rep_i = 1; rep_i < nb_rep; rep_i++) {
 			Bool swap=GF_FALSE;
@@ -4851,7 +4933,7 @@ static GF_Err gf_dash_setup_period(GF_DashClient *dash)
 				rep_i=0;
 			}
 		}
-
+//*/
 select_active_rep:
 		group->min_representation_bitrate = (u32) -1;
 		active_rep_found = GF_FALSE;
@@ -4864,7 +4946,6 @@ select_active_rep:
 				active_rep = rep_i;
 				active_rep_found = GF_TRUE;
 			}
-
 			rep_sel = gf_list_get(group->adaptation_set->representations, active_rep);
 
 			if (group_has_video && !rep->width && !rep->height) {
@@ -4991,10 +5072,10 @@ select_active_rep:
 		nb_groups_ok++;
 	}
 	dash->start_range_period = 0;
-
 	//setup SRDs
 	for (as_i = 0; as_i<gf_list_count(dash->SRDs); as_i++) {
-		u32 cols[10], rows[10];
+//KK Change Code -- here used to have limitation on srd # 
+		u32 cols[10], rows[15];// u32 cols[10], rowa[10];
 		struct _dash_srd_desc *srd = gf_list_get(dash->SRDs, as_i);
 
 		srd->srd_nb_rows = srd->srd_nb_cols = 0;
@@ -5057,7 +5138,6 @@ select_active_rep:
 			} else {
 				group->srd_row_idx = k;
 			}
-
 		}
 		gf_dash_set_tiles_quality(dash, srd);
 	}
@@ -5411,6 +5491,9 @@ static DownloadGroupStatus dash_download_group_download(GF_DashClient *dash, GF_
 	}
 
 	/* At this stage, there are some segments left to be downloaded */
+//KK ADD CODE
+//让要下载的segment_index与global的max_seg_index即当前播放的最新时间段同步(解决全局tiles之间不同步的问题)
+	group->download_segment_index = max_seg_index; 
 	e = gf_dash_resolve_url(dash->mpd, rep, group, dash->base_url, GF_MPD_RESOLVE_URL_MEDIA, group->download_segment_index, &new_base_seg_url, &start_range, &end_range, &group->current_downloaded_segment_duration, NULL, &key_url, &key_iv, NULL);
 
 	if (e || !new_base_seg_url) {
@@ -5606,7 +5689,75 @@ static DownloadGroupStatus dash_download_group_download(GF_DashClient *dash, GF_
 	if (e) return GF_DASH_DownloadCancel;
 	return GF_DASH_DownloadSuccess;
 }
+static float global_cam_dir_x = 0.707;//0;//0.707;
+static float global_cam_dir_y = 0;
+static float global_cam_dir_z = -0.707;//-1;//-0.707;
 
+//KK ADD CODE
+//仿真：用来实现生成自转的cam_dir的功能
+static generate_cam_dir(){
+	GF_Vec cam_dir, rot_axis, new_cam_dir;
+	GF_Vec4 Quat;
+
+	rot_axis.x = 0.707;//0;
+	rot_axis.y = 0;//1;
+	rot_axis.z = 0.707;//0;
+	
+	cam_dir.x = global_cam_dir_x;
+	cam_dir.y = global_cam_dir_y;
+	cam_dir.z = global_cam_dir_z;
+	gf_vec_norm(&cam_dir);
+	//沿着y轴转30度每次
+	//Quat = gf_quat_from_axis_cos(rot_axis, FLT2FIX(0.866));
+	//沿着y轴转30度每次
+	Quat = gf_quat_from_axis_cos(rot_axis, FLT2FIX(0.707));
+	
+
+	new_cam_dir = gf_quat_rotate(&Quat, &cam_dir);
+	gf_vec_norm(&new_cam_dir);
+	
+	global_cam_dir_x = new_cam_dir.x;
+	global_cam_dir_y = new_cam_dir.y;
+	global_cam_dir_z = new_cam_dir.z;
+printf("KK@L5691 cam_dir:%f %f %f\n", (float)new_cam_dir.x, (float)new_cam_dir.y, (float)new_cam_dir.z);	
+
+}
+//用于检测当前tile是否在active region内
+static Bool is_active_tile(GF_DASH_Group *group, int idx)
+{
+	//download all LR tiles
+	if(idx < LR_offset)
+		return GF_TRUE;
+	//don't download empty tiles
+	int i = idx - COL;
+	if(i < 0)
+		return GF_FALSE;
+	
+	GF_Vec dir;
+	if(i < ROW*COL){
+		dir.x = FLT2FIX(Dir_Table[i][0]);
+		dir.y = FLT2FIX(Dir_Table[i][1]);
+		dir.z = FLT2FIX(Dir_Table[i][2]);
+		gf_vec_norm(&dir);
+	}
+	else{
+		dir.x = 0; dir.y = 0; dir.z = -1;
+	}
+	
+	GF_Vec cam_dir;
+#ifdef SIMULATION
+	cam_dir.x = global_cam_dir_x;
+	cam_dir.y = global_cam_dir_y;
+	cam_dir.z = global_cam_dir_z;
+#else
+	gf_mo_get_VPInfo(&cam_dir);
+#endif
+	float sinTheta = gf_vec_dot(dir, cam_dir);
+	if( sinTheta>0.707)//0.25)//0.707 )
+		return GF_TRUE;
+	else
+		return GF_FALSE;
+}
 
 static DownloadGroupStatus dash_download_group(GF_DashClient *dash, GF_DASH_Group *group, GF_DASH_Group *base_group, Bool has_dep_following)
 {
@@ -5623,6 +5774,17 @@ static DownloadGroupStatus dash_download_group(GF_DashClient *dash, GF_DASH_Grou
 		u32 i, count = gf_list_count(group->groups_depending_on);
 		i = group->current_dep_idx - 1;
 		for (; i<count; i++) {
+//*******************************KK ADD CODE ***
+			// Record the latest segment_index. Use Tile#0 since the 1st tile is compulsory.
+			if(i == 0)
+				max_seg_index=group->download_segment_index;
+			//Eliminate the inactive regions		
+			if(i !=0 && i!=count-1)
+			{
+				if(!is_active_tile(group, i)) 
+					continue;
+			}
+//*******************************KK CODE END ***
 
 			GF_DASH_Group *dep_group = gf_list_get(group->groups_depending_on, i);
 			if ((i+1==count) && !dep_group->groups_depending_on)
@@ -5641,7 +5803,6 @@ static DownloadGroupStatus dash_download_group(GF_DashClient *dash, GF_DASH_Grou
 	group->current_dep_idx = 0;
 	return GF_DASH_DownloadSuccess;
 }
-
 //tile based adaptation
 static void dash_global_rate_adaptation(GF_DashClient *dash, Bool for_postponed_only)
 {
@@ -5914,7 +6075,6 @@ restart_period:
 	dash->dash_state = GF_DASH_STATE_SETUP;
 	gf_mx_v(dash->dash_mutex);
 	dash->in_period_setup = 1;
-
 	/*setup period*/
 	e = gf_dash_setup_period(dash);
 	if (e) {
@@ -5968,7 +6128,6 @@ restart_period:
 	dash->dash_state = GF_DASH_STATE_CONNECTING;
 	gf_mx_v(dash->dash_mutex);
 
-
 	/*ask the user to connect to desired groups*/
 	e = dash->dash_io->on_dash_event(dash->dash_io, GF_DASH_EVENT_CREATE_PLAYBACK, -1, GF_OK);
 	if (e) {
@@ -5985,10 +6144,15 @@ restart_period:
 	dash->dash_state = GF_DASH_STATE_RUNNING;
 	gf_mx_v(dash->dash_mutex);
 
+//KK BookMark
 	dash->min_wait_ms_before_next_request = 0;
 	while (go_on) {
 		Bool has_postponed_rate_adaptation = GF_FALSE;
 
+//KK ADD CODE:
+#ifdef SIMULATION
+generate_cam_dir();
+#endif
 		/*wait until next segment is needed*/
 		while (!dash->mpd_stop_request) {
 			u32 timer = gf_sys_clock() - dash->last_update_time;
@@ -6159,6 +6323,7 @@ restart_period:
 					continue;
 				}
 				group->download_th_done = GF_TRUE;
+printf("KK@#L6324 max_seg_index:%d\n", max_seg_index);
 			}
 		}
 
@@ -8323,7 +8488,6 @@ GF_Err gf_dash_group_set_visible_rect(GF_DashClient *dash, u32 idx, u32 min_x, u
 	}
 	return GF_OK;
 }
-
 
 
 #endif //GPAC_DISABLE_DASH_CLIENT

@@ -1823,7 +1823,10 @@ void gf_es_on_connect(GF_Channel *ch)
 	com.buffer.min = 0;
 	sOpt = gf_cfg_get_key(ch->odm->term->user->config, "Network", "RebufferLength");
 	if (sOpt) com.buffer.min = atoi(sOpt);
-
+//*************************KK ADD CODE HERE******************************
+	com.buffer.min = 0;
+	com.buffer.max = 1000;
+//*************************KK ADD CODE END******************************
 	com.buffer.occupancy = com.buffer.max;
 	sOpt = gf_cfg_get_key(ch->odm->term->user->config, "Network", "BufferMaxOccupancy");
 	if (sOpt) com.buffer.occupancy = atoi(sOpt);
