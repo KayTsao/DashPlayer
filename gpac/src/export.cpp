@@ -2076,6 +2076,7 @@
 #pragma comment (linker, EXPORT_SYMBOL(gf_dasher_enable_loop_inputs) )
 #pragma comment (linker, EXPORT_SYMBOL(gf_dasher_set_split_on_bound) )
 #pragma comment (linker, EXPORT_SYMBOL(gf_dasher_set_split_on_closest) )
+#pragma comment (linker, EXPORT_SYMBOL(gf_dasher_set_cues) )
 
 
 #pragma comment (linker, EXPORT_SYMBOL(gf_dasher_next_update_time) )
@@ -2224,3 +2225,5 @@
 #pragma comment (linker, EXPORT_SYMBOL(gf_dm_force_headers) )
 #pragma comment (linker, EXPORT_SYMBOL(gf_term_service_get_dm) )
 #pragma comment (linker, EXPORT_SYMBOL(gf_dm_set_localcache_provider) )
+
+#pragma comment (linker, EXPORT_SYMBOL(av1_get_obu_name) )

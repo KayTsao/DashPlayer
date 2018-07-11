@@ -631,6 +631,7 @@ ISOM_BOX_IMPL_DECL(senc)
 ISOM_BOX_IMPL_DECL(cslg)
 ISOM_BOX_IMPL_DECL(ccst)
 ISOM_BOX_IMPL_DECL(hvcc)
+ISOM_BOX_IMPL_DECL(av1c)
 ISOM_BOX_IMPL_DECL(prft)
 
 ISOM_BOX_IMPL_DECL(trep)
@@ -1013,6 +1014,10 @@ static const struct box_registry_entry {
 	BOX_DEFINE_S( GF_ISOM_BOX_TYPE_LHE1, video_sample_entry, "stsd", "p15"),
 	BOX_DEFINE_S( GF_ISOM_BOX_TYPE_HVT1, video_sample_entry, "stsd", "p15"),
 
+	//AV1 in ISOBMFF boxes
+	BOX_DEFINE_S(GF_ISOM_BOX_TYPE_AV01, video_sample_entry, "stsd", "av1"),
+	FBOX_DEFINE_FLAGS_S(GF_ISOM_BOX_TYPE_AV1C, av1c, "av01 encv resv", 0, 0, "av1"),
+
 	//part20 boxes
 	BOX_DEFINE_S( GF_ISOM_BOX_TYPE_LSR1, lsr1, "stsd", "p20"),
 	BOX_DEFINE_S( GF_ISOM_BOX_TYPE_LSRC, lsrc, "lsr1", "p20"),
@@ -1228,7 +1233,7 @@ GF_Box *gf_isom_box_new(u32 boxType)
 
 void gf_isom_box_add_for_dump_mode(GF_Box *parent, GF_Box *a)
 {
-	if (use_dump_mode && (!parent->other_boxes || (gf_list_find(parent->other_boxes, a)<0) ) )
+	if (use_dump_mode && a && (!parent->other_boxes || (gf_list_find(parent->other_boxes, a)<0) ) )
 		gf_isom_box_add_default(parent, a);
 }
 

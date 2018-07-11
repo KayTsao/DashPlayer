@@ -35,6 +35,7 @@
 #include <time.h>
 #endif
 #include <gpac/internal/isomedia_dev.h>
+#include <gpac/internal/mpd.h>
 
 #ifndef GPAC_DISABLE_ISOM_WRITE
 #ifdef GPAC_DISABLE_ISOM
@@ -147,6 +148,8 @@ struct __gf_dash_segmenter
 
 	/* used to segment video as close to the boundary as possible */
 	Bool split_on_closest;
+	const char *cues_file;
+	Bool strict_cues;
 };
 
 struct _dash_segment_input
@@ -433,6 +436,7 @@ GF_Err gf_media_get_rfc_6381_codec_name(GF_ISOFile *movie, u32 track, char *szCo
 #ifndef GPAC_DISABLE_HEVC
 	GF_HEVCConfig *hvcc;
 #endif
+
 	u32 subtype = gf_isom_get_media_subtype(movie, track, 1);
 
 	if (subtype == GF_ISOM_SUBTYPE_MPEG4_CRYP) {
@@ -545,7 +549,6 @@ GF_Err gf_media_get_rfc_6381_codec_name(GF_ISOFile *movie, u32 track, char *szCo
 	case GF_ISOM_SUBTYPE_HVT1:
 	case GF_ISOM_SUBTYPE_LHV1:
 	case GF_ISOM_SUBTYPE_LHE1:
-
 		if (force_inband) {
 			if (subtype==GF_ISOM_SUBTYPE_HVC1) subtype = GF_ISOM_SUBTYPE_HEV1;
 			else if (subtype==GF_ISOM_SUBTYPE_HVC2) subtype = GF_ISOM_SUBTYPE_HEV2;
@@ -625,7 +628,60 @@ GF_Err gf_media_get_rfc_6381_codec_name(GF_ISOFile *movie, u32 track, char *szCo
 			snprintf(szCodec, RFC6381_CODEC_NAME_SIZE_MAX, "%s", gf_4cc_to_str(subtype));
 		}
 		return GF_OK;
-#endif
+#endif /*GPAC_DISABLE_HEVC*/
+
+#ifndef GPAC_DISABLE_AV1
+	case GF_ISOM_SUBTYPE_AV01: {
+		GF_AV1Config *av1c = NULL;
+		AV1State av1_state;
+		GF_BitStream *bs = NULL;
+		GF_Err e = GF_OK;
+		u32 i = 0;
+
+		memset(&av1_state, 0, sizeof(AV1State));
+		av1c = gf_isom_av1_config_get(movie, track, 1);
+		if (!av1c) {
+			GF_LOG(GF_LOG_DEBUG, GF_LOG_AUTHOR, ("[ISOM Tools] No config found for AV1 file (\"%s\") when computing RFC6381.\n", gf_4cc_to_str(subtype)));
+			return GF_BAD_PARAM;
+		}
+
+		for (i = 0; i < gf_list_count(av1c->obu_array); ++i) {
+			GF_AV1_OBUArrayEntry *a = gf_list_get(av1c->obu_array, i);
+			bs = gf_bs_new(a->obu, a->obu_length, GF_BITSTREAM_READ);
+			if (!av1_is_obu_header(a->obu_type))
+				GF_LOG(GF_LOG_WARNING, GF_LOG_AUTHOR, ("[ISOM Tools] AV1: unexpected obu_type %d when computing RFC6381. PArsing anyway.\n", a->obu_type, gf_4cc_to_str(subtype)));
+
+			e = aom_av1_parse_temporal_unit_from_section5(bs, &av1_state);
+			gf_bs_del(bs); bs = NULL;
+			if (e) {
+				gf_odf_av1_cfg_del(av1c);
+				return e;
+			}
+		}
+
+		snprintf(szCodec, RFC6381_CODEC_NAME_SIZE_MAX, "%s.%01u.%u.%u.%01u.%01u%01u%01u", gf_4cc_to_str(subtype),
+			av1_state.seq_profile, av1_state.seq_level_idx, av1_state.bit_depth,
+			av1_state.mono_chrome,
+			av1_state.chroma_subsampling_x, av1_state.chroma_subsampling_y, av1_state.chroma_sample_position);
+			
+		if (av1_state.color_description_present_flag) {
+			char tmp[RFC6381_CODEC_NAME_SIZE_MAX];
+			snprintf(tmp, RFC6381_CODEC_NAME_SIZE_MAX, "%01u.%01u.%01u.%01u", av1_state.color_primaries, av1_state.transfer_characteristics, av1_state.matrix_coefficients, av1_state.color_range);
+			strcat(szCodec, tmp);
+		} else {
+			if (av1_state.color_primaries == 1 && av1_state.transfer_characteristics == 1 && av1_state.matrix_coefficients == 1 && av1_state.color_range == GF_FALSE) {
+
+			} else {
+				GF_LOG(GF_LOG_WARNING, GF_LOG_AUTHOR, ("[AV1] incoherent color characteristics primaries %d transfer %d matrix %d color range %d\n", av1_state.color_primaries, av1_state.transfer_characteristics, av1_state.matrix_coefficients, av1_state.color_range));
+//				assert(0);
+			}
+		}
+
+		gf_odf_av1_cfg_del(av1c);
+		av1_reset_frame_state(&av1_state.frame_state);
+		return GF_OK;
+	}
+#endif /*GPAC_DISABLE_AV1*/
 
 	default:
 		GF_LOG(GF_LOG_DEBUG, GF_LOG_AUTHOR, ("[ISOM Tools] codec parameters not known - setting codecs string to default value \"%s\"\n", gf_4cc_to_str(subtype) ));
@@ -659,6 +715,11 @@ typedef struct
 	s32 media_time_to_pres_time_shift;
 	u64 min_cts_in_segment;
 	u64 start_tfdt;
+
+	u32 cues_timescale;
+	u32 nb_cues;
+	GF_DASHCueInfo *cues;
+	Bool cues_use_edits;
 } GF_ISOMTrackFragmenter;
 
 static u64 isom_get_next_sap_time(GF_ISOFile *input, u32 track, u32 sample_count, u32 sample_num)
@@ -1350,6 +1411,12 @@ static GF_Err gf_media_isom_segment_file(GF_ISOFile *input, const char *output_f
 
 		tf->finalSampleDescriptionIndex = 1;
 
+		if (dasher->cues_file) {
+			e = gf_mpd_load_cues(dasher->cues_file, tf->TrackID, &tf->cues_timescale, &tf->cues_use_edits, &tf->cues, &tf->nb_cues);
+			if (e) goto err_exit;
+		}
+
+
 		/*figure out if we have an initial TS*/
 		if (!dash_moov_setup) {
 			u32 j, edit_count = gf_isom_get_edit_segment_count(input, i+1);
@@ -1836,6 +1903,7 @@ restart_fragmentation_pass:
 
 			//ok write samples
 			while (1) {
+				u64 last_sample_dts;
 				Bool loop_track = GF_FALSE;
 				Bool force_eos = GF_FALSE;
 				Bool stop_frag = GF_FALSE;
@@ -2008,6 +2076,7 @@ restart_fragmentation_pass:
 
 				tf->last_sample_cts = sample->DTS + sample->CTS_Offset;
 				tf->next_sample_dts = sample->DTS + sample_duration;
+				last_sample_dts = sample->DTS;
 
 				if (split_sample_duration) {
 					gf_isom_sample_del(&next);
@@ -2147,7 +2216,99 @@ restart_fragmentation_pass:
 					next_sample_rap = GF_FALSE;
 				}
 
-				if (tf->SampleNum==tf->SampleCount) {
+				if (tf->cues && sample) {
+					u32 cidx;
+					GF_DASHCueInfo *cue=NULL;
+					Bool is_split = GF_FALSE;
+					s32 has_mismatch = -1;
+					s32 strip_from = -1;
+
+					stop_frag = GF_FALSE;
+					force_switch_segment = GF_FALSE;
+
+					for (cidx=0;cidx<tf->nb_cues; cidx++) {
+						cue = &tf->cues[cidx];
+						if (cue->sample_num) {
+							//ignore first sample
+							if (cue->sample_num==1) continue;
+
+							if (cue->sample_num == tf->SampleNum+1) {
+								is_split = GF_TRUE;
+								break;
+							} else if (cue->sample_num < tf->SampleNum+1) {
+								if (cue->sample_num == tf->SampleNum) {
+									strip_from = cidx;
+								} else {
+									has_mismatch = cidx;
+								}
+							} else {
+								break;
+							}
+						}
+						else if (cue->dts) {
+							u64 ts = cue->dts * tf->TimeScale;
+							u64 ts2 = sample->DTS * tf->cues_timescale;
+							if (ts == ts2) {
+								is_split = GF_TRUE;
+								break;
+							} else if (ts < ts2) {
+								if (last_sample_dts * tf->cues_timescale == ts) {
+									strip_from = cidx;
+								} else {
+									has_mismatch = cidx;
+								}
+							} else {
+								break;
+							}
+						}
+						else if (cue->cts) {
+							s64 ts = cue->cts * tf->TimeScale;
+							s64 ts2 = (sample->DTS + sample->CTS_Offset) * tf->cues_timescale;
+
+							//cues are given in track timeline (presentation time), substract the media time to pres time offset
+							if (tf->cues_use_edits) {
+								ts -= (s64) (tf->media_time_to_pres_time_shift) * tf->TimeScale;
+							}
+							if (ts == ts2) {
+								is_split = GF_TRUE;
+								break;
+							} else if (ts < ts2) {
+								if (tf->last_sample_cts * tf->cues_timescale == ts) {
+									strip_from = cidx;
+								} else {
+									has_mismatch = cidx;
+								}
+							} else {
+								break;
+							}
+						}
+					}
+					if (is_split) {
+						if (!next_sample_rap) {
+							GF_LOG(dasher->strict_cues ?  GF_LOG_ERROR : GF_LOG_WARNING, GF_LOG_DASH, ("[DASH] cue found (sn %d - dts "LLD" - cts "LLD") for track ID %d but sample %d is not RAP !\n", cue->sample_num, cue->dts, cue->cts, tf->TrackID, tf->SampleNum));
+							if (dasher->strict_cues) {
+								e = GF_BAD_PARAM;
+								goto err_exit;
+							}
+						}
+						stop_frag = GF_TRUE;
+						force_switch_segment = GF_TRUE;
+						memmove(tf->cues, &tf->cues[cidx+1], (tf->nb_cues-cidx-1) * sizeof(GF_DASHCueInfo));
+						tf->nb_cues -= cidx+1;
+					} else if (strip_from>=0) {
+						memmove(tf->cues, &tf->cues[strip_from+1], (tf->nb_cues-strip_from-1) * sizeof(GF_DASHCueInfo));
+						tf->nb_cues -= strip_from+1;
+					}
+
+					if (has_mismatch>=0) {
+						cue = &tf->cues[has_mismatch];
+						GF_LOG(dasher->strict_cues ?  GF_LOG_ERROR : GF_LOG_WARNING, GF_LOG_DASH, ("[DASH] found cue (sn %d - dts "LLD" - cts "LLD") in track ID %d before current sample (sn %d - dts "LLD" - cts "LLD") , buggy source cues ?\n", cue->sample_num, cue->dts, cue->cts, tf->TrackID, tf->SampleNum+1, sample->DTS, sample->DTS + sample->CTS_Offset));
+							if (dasher->strict_cues) {
+								e = GF_BAD_PARAM;
+								goto err_exit;
+							}
+					}
+				} else if (tf->SampleNum==tf->SampleCount) {
 					stop_frag = GF_TRUE;
 				} else if (tf->is_ref_track) {
 					/* NOTE: we don't need to check for split_sample_duration because if it is used, stop_frag should already be TRUE */
@@ -2868,6 +3029,11 @@ err_exit:
 	if (fragmenters) {
 		while (gf_list_count(fragmenters)) {
 			tf = (GF_ISOMTrackFragmenter *)gf_list_get(fragmenters, 0);
+			if (!e && tf->nb_cues) {
+				GF_LOG(dasher->strict_cues ? GF_LOG_ERROR : GF_LOG_WARNING, GF_LOG_DASH, ("[DASH] Track ID %d still has %d cues not processed after segmentation\n", tf->TrackID, tf->nb_cues));
+				if (dasher->strict_cues) e = GF_BAD_PARAM;
+			}
+			if (tf->cues) gf_free(tf->cues);
 			gf_free(tf);
 			gf_list_rem(fragmenters, 0);
 		}
@@ -6121,6 +6287,15 @@ GF_Err gf_dasher_set_split_on_closest(GF_DASHSegmenter *dasher, Bool split_on_cl
 	dasher->split_on_closest = split_on_closest;
 	return GF_OK;
 }
+
+GF_EXPORT
+GF_Err gf_dasher_set_cues(GF_DASHSegmenter *dasher, const char *cues_file, Bool strict_cues)
+{
+	dasher->cues_file = cues_file;
+	dasher->strict_cues = strict_cues;
+	return GF_OK;
+}
+
 
 static void dash_input_check_period_id(GF_DASHSegmenter *dasher, GF_DashSegInput *dash_input)
 {
