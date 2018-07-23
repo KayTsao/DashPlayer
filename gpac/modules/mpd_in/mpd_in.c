@@ -354,6 +354,7 @@ static GF_Err MPD_ClientQuery(GF_InputService *ifce, GF_NetworkCommand *param)
 		for (i=0; i<gf_dash_get_group_count(mpdin->dash); i++) {
 			if (!gf_dash_is_group_selected(mpdin->dash, i)) continue;
 			group = gf_dash_get_group_udta(mpdin->dash, i);
+if(group == NULL) continue;
 			if (group->segment_ifce == ifce) {
 				group_idx = i;
 				break;
@@ -1015,6 +1016,10 @@ GF_Err MPD_ConnectService(GF_InputService *plug, GF_ClientService *serv, const c
 
 	disable_switching = 0;
 	opt = gf_modules_get_option((GF_BaseInterface *)plug, "DASH", "NetworkAdaptation");
+//KK ADD CODE
+opt = "FOV";
+gf_modules_set_option((GF_BaseInterface *)plug, "DASH", "NetworkAdaptation", opt);
+
 	if (!opt) {
 		opt = "buffer";
 		gf_modules_set_option((GF_BaseInterface *)plug, "DASH", "NetworkAdaptation", opt);
@@ -1044,6 +1049,9 @@ GF_Err MPD_ConnectService(GF_InputService *plug, GF_ClientService *serv, const c
 	else if (!strcmp(opt, "BOLA_O")) {
 		mpdin->adaptation_algorithm = GF_DASH_ALGO_BOLA_O;
 	}
+	else if(!strcmp(opt, "FOV")){
+		mpdin->adaptation_algorithm = GF_DASH_ALGO_FOV_BASED;
+	}
 
 	opt = gf_modules_get_option((GF_BaseInterface *)plug, "DASH", "StartRepresentation");
 	if (!opt) {
@@ -1058,8 +1066,8 @@ GF_Err MPD_ConnectService(GF_InputService *plug, GF_ClientService *serv, const c
 
 	opt = gf_modules_get_option((GF_BaseInterface *)plug, "DASH", "MemoryStorage");
 	if (!opt) gf_modules_set_option((GF_BaseInterface *)plug, "DASH", "MemoryStorage", "yes");
+//KK: if memory_storage = GF_FALSE //cache will be write on disk
 	mpdin->memory_storage = (!opt || !strcmp(opt, "yes")) ? GF_TRUE : GF_FALSE;
-
 	opt = gf_modules_get_option((GF_BaseInterface *)plug, "DASH", "UseMaxResolution");
 	if (!opt) {
 		opt = "yes";

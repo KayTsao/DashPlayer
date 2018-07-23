@@ -52,9 +52,10 @@
 #define ROW 12
 #define COL 8
 #define LR_offset 6
-
-#define SIMULATION
-#define HORI_ROT
+//#define INTEGRATED_FACES
+//#define SEPERATED_FACES
+//#define SIMULATION
+//#define HORI_ROT
 
 #ifdef SIMULATION
 	#ifndef HORI_ROT
@@ -141,6 +142,47 @@ static float Dir_Table[ROW * COL][3]=
 
 };
 
+#define HR_CONTAINER_H 4
+#define HR_CONTAINER_W 4
+#define HR_CONTAINER_CNT 6
+
+static float Dir_Table_3D [HR_CONTAINER_CNT][HR_CONTAINER_W * HR_CONTAINER_H][3]=
+{ 
+// cube alike
+//******************Front
+{{-0.375, 0.375,-0.625}, {-0.125, 0.375,-0.875}, {0.125, 0.375, -0.875}, {0.375, 0.375,-0.625},
+ {-0.375, 0.125,-0.625}, {-0.125, 0.125,-0.875}, {0.125, 0.125, -0.875}, {0.375, 0.125,-0.625},
+ {-0.375,-0.125,-0.625}, {-0.125,-0.125,-0.875}, {0.125,-0.125, -0.875}, {0.375,-0.125,-0.625},
+ {-0.375,-0.375,-0.625}, {-0.125,-0.375,-0.875}, {0.125,-0.375, -0.875}, {0.375,-0.375,-0.625}},
+//******************Down
+{{-0.375,-0.625,-0.375}, {-0.125,-0.625,-0.375}, {0.125,-0.625, -0.375}, {0.375,-0.625,-0.375},
+ {-0.375,-0.625,-0.125}, {-0.125,-0.875,-0.125}, {0.125,-0.875, -0.125}, {0.375,-0.625,-0.125},
+ {-0.375,-0.625, 0.125}, {-0.125,-0.875, 0.125}, {0.125,-0.875,  0.125}, {0.375,-0.625, 0.125},
+ {-0.375,-0.625, 0.375}, {-0.125,-0.625, 0.375}, {0.125,-0.625,  0.375}, {0.375,-0.625, 0.375}},
+//******************Right
+{{0.625, 0.375,-0.375},  {0.875, 0.375, -0.125}, {0.875,  0.375, 0.125}, { 0.625, 0.375,0.375}, 
+ {0.625, 0.125,-0.375},  {0.875, 0.125, -0.125}, {0.875,  0.125, 0.125}, { 0.625, 0.125,0.375},
+ {0.625,-0.125,-0.375},  {0.875,-0.125, -0.125}, {0.875, -0.125, 0.125}, { 0.625,-0.125,0.375},
+ {0.625,-0.375,-0.375},  {0.875,-0.375, -0.125}, {0.875, -0.375, 0.125}, { 0.625,-0.375,0.375}},
+
+//******************Back
+{{0.375, 0.375, 0.625},  {0.125,  0.375, 0.875}, {-0.125, 0.375, 0.875}, {-0.375, 0.375,0.625},
+ {0.375, 0.125, 0.625},  {0.125,  0.125, 0.875}, {-0.125, 0.125, 0.875}, {-0.375, 0.125,0.625},
+ {0.375,-0.125, 0.625},  {0.125, -0.125, 0.875}, {-0.125,-0.125, 0.875}, {-0.375,-0.125,0.625},
+ {0.375,-0.375, 0.625},  {0.125, -0.375, 0.875}, {-0.125,-0.375, 0.875}, {-0.375,-0.375,0.625}},
+
+//******************Left
+{{-0.625, 0.375, 0.375}, {-0.875, 0.375, 0.125}, {-0.875, 0.375,-0.125}, {-0.625, 0.375,-0.375},
+ {-0.625, 0.125, 0.375}, {-0.875, 0.125, 0.125}, {-0.875, 0.125,-0.125}, {-0.625, 0.125,-0.375},
+ {-0.625,-0.125, 0.375}, {-0.875,-0.125, 0.125}, {-0.875,-0.125,-0.125}, {-0.625,-0.125,-0.375},
+ {-0.625,-0.375, 0.375}, {-0.875,-0.375, 0.125}, {-0.875,-0.375,-0.125}, {-0.625,-0.375,-0.375}},
+
+//******************Up
+{{-0.375, 0.625, 0.375}, {-0.125, 0.625, 0.375}, { 0.125, 0.625, 0.375}, { 0.375, 0.625, 0.375},
+ {-0.375, 0.625, 0.125}, {-0.125, 0.875, 0.125}, { 0.125, 0.875, 0.125}, { 0.375, 0.625, 0.125},
+ {-0.375, 0.625,-0.125}, {-0.125, 0.875,-0.125}, { 0.125, 0.875,-0.125}, { 0.375, 0.625,-0.125},
+ {-0.375, 0.625,-0.375}, {-0.125, 0.625,-0.375}, { 0.125, 0.625,-0.375}, { 0.375, 0.625,-0.375}}
+};
 
 typedef enum {
 	GF_DASH_STATE_STOPPED = 0,
@@ -434,7 +476,12 @@ struct __dash_group
 	/* current segment index in BBA and BOLA algorithm */
 	u32 current_index;
 //KK ADD CODE
+#ifdef INTEGRATED_FACES
 	GF_Vec direction;
+#endif
+#ifdef SEPERATED_FACES
+	GF_Vec direction_set[HR_CONTAINER_CNT] ;
+#endif
 
 };
 
@@ -2740,6 +2787,62 @@ static GF_Err dash_do_rate_monitor_default(GF_DashClient *dash, GF_DASH_Group *g
 	return GF_OK;
 }
 
+//KK ADD CODE 
+static s32 dash_do_rate_adaptation_fov_based(GF_DashClient *dash, GF_DASH_Group *group, GF_DASH_Group *base_group, u32 dl_rate, Double speed,
+					Double max_available_speed, Bool force_lower_complexity, GF_MPD_Representation *rep, Bool go_up_bitrate)
+{
+	s32 new_index = group->active_rep_index;
+	/* for panda test. insert black tiles.....
+	int count = gf_list_count(group->adaptation_set->representations);
+	printf("count= %d index:%d\n", count, new_index);
+	if(count == 2)
+	{
+		if(new_index == 0)
+			new_index=1;
+		else
+			new_index =0; 
+
+	}*/
+#ifdef SEPERATED_FACES
+	u32 k;
+	//GF_MPD_Representation *new_rep;
+	/* for each playable representation, if we still need to switch, evaluate it */
+	float MaxAngle = 0.0f;
+	float cosTheta;
+	for (k = 0; k<gf_list_count(group->adaptation_set->representations); k++) {
+		GF_MPD_Representation *arep = gf_list_get(group->adaptation_set->representations, k);
+		GF_Vec cam_dir;
+	#ifdef SIMULATION
+		cam_dir.x = global_cam_dir_x;
+		cam_dir.y = global_cam_dir_y;
+		cam_dir.z = global_cam_dir_z;
+	#else
+		gf_mo_get_VPInfo(&cam_dir);
+	#endif
+		cosTheta = gf_vec_dot(group->direction_set[k], cam_dir);
+		if(cosTheta > MaxAngle){
+			MaxAngle = cosTheta;
+			new_index = k;
+		}
+	}
+	printf("tile[X]_rep[%d] tile_dir[%f, %f, %f]\n", new_index, (float)group->direction_set[new_index].x, 
+	group->direction_set[new_index].y, (float)group->direction_set[new_index].z);
+/*
+	if (!new_rep || (new_rep == rep)) {
+		GF_LOG(GF_LOG_DEBUG, GF_LOG_DASH, ("[DASH] AS#%d no better match for requested bandwidth %d - not switching (AS bitrate %d)!\n", 1 + gf_list_find(group->period->adaptation_sets, group->adaptation_set), dl_rate, rep->bandwidth));
+		//do_switch = GF_FALSE;
+	}
+*/
+#endif
+//#ifndef SEPERATED_FACES
+	//buffer
+//	return dash_do_rate_adaptation_legacy_buffer(dash, group, base_group, dl_rate, speed, 
+//						max_available_speed, force_lower_complexity, rep, go_up_bitrate);
+//#endif
+	return new_index;
+}
+//KK CODE END
+
 static s32 dash_do_rate_adaptation_legacy_rate(GF_DashClient *dash, GF_DASH_Group *group, GF_DASH_Group *base_group,
 												u32 dl_rate, Double speed, Double max_available_speed, Bool force_lower_complexity,
 												GF_MPD_Representation *rep, Bool go_up_bitrate)
@@ -3220,6 +3323,7 @@ static s32 dash_do_rate_adaptation_bola(GF_DashClient *dash, GF_DASH_Group *grou
 /* This function is called each time a new segment has been downloaded */
 static void dash_do_rate_adaptation(GF_DashClient *dash, GF_DASH_Group *group)
 {
+	
 	Double speed;
 	Double max_available_speed;
 	u32 dl_rate;
@@ -3960,7 +4064,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 
 		GF_SAFEALLOC(group, GF_DASH_Group);
 		if (!group) return GF_OUT_OF_MEM;
-//开始给新建的grouop赋值
+//开始给新建的group赋值
 		group->dash = dash;
 		group->adaptation_set = set;
 		group->period = period;
@@ -3972,10 +4076,14 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 		group->bitstream_switching = (set->bitstream_switching || period->bitstream_switching) ? GF_TRUE : GF_FALSE;//默认为true
 		seg_dur = 0;
 		nb_dependant_rep = 0;
+		
+		//KK 遍历所有的representations a
 		for (j=0; j<gf_list_count(set->representations); j++) {
+//		printf("This is adaptation_sets:%d\t representation:%d\n", i, j);
 			Double dur;
 			u32 nb_seg, k;
 			Bool cp_supported;
+			//得到当前的第j个representation~
 			GF_MPD_Representation *rep = gf_list_get(set->representations, j);
 			//KK 获得一个rep中的segment时长和总个数
 			gf_dash_get_segment_duration(rep, set, period, dash->mpd, &nb_seg, &dur);
@@ -4141,6 +4249,7 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 		}
 
 		//KK ADD CODE 为group中新增的direction变量赋值, 记录tile的中心方向 
+#ifdef INTEGRATED_FACES
 		{
 			int id,LROffset;
 			LROffset = COL;
@@ -4160,6 +4269,36 @@ GF_Err gf_dash_setup_groups(GF_DashClient *dash)
 			}	
 			group->direction = dir; 
 		}		
+#endif
+
+#ifdef SEPERATED_FACES
+		{
+			if(i>0)
+			{
+				int idx, col_id, row_id;			
+				GF_Vec dir;
+				for(int k =0; k < HR_CONTAINER_CNT; k++)
+				{
+					if( (i-1)%6 < HR_CONTAINER_W)
+					{
+						row_id = (i-1)/6;
+						col_id = (i-1)%6;
+						idx = HR_CONTAINER_W * row_id + col_id;
+
+						dir.x = FLT2FIX(Dir_Table_3D[k][idx][0]);
+						dir.y = FLT2FIX(Dir_Table_3D[k][idx][1]);
+						dir.z = FLT2FIX(Dir_Table_3D[k][idx][2]);
+					}
+					else{
+						dir.x = dir.y = dir.z = FLT2FIX(0) ;//LR Parts
+					}
+					group->direction_set[k] = dir;
+					printf("adapt_set:%d rep[%d] dir: %f %f %f\n", i, k,
+					(float)group->direction_set[k].x,(float)group->direction_set[k].y, (float)group->direction_set[k].z);
+				}
+			}
+		}
+#endif
 //增加group到list
 		e = gf_list_add(dash->groups, group);
 		if (e) {
@@ -4950,7 +5089,7 @@ static GF_Err gf_dash_setup_period(GF_DashClient *dash)
 			if (rep->width && rep->height) group_has_video = GF_TRUE;
 		}
 //KK 注释掉原程序中按升序排列representation的代码
-		//sort by ascending bandwidth and quality
+/*		//sort by ascending bandwidth and quality
 		for (rep_i = 1; rep_i < nb_rep; rep_i++) {
 			Bool swap=GF_FALSE;
 			GF_MPD_Representation *r2 = gf_list_get(group->adaptation_set->representations, rep_i);
@@ -4966,7 +5105,7 @@ static GF_Err gf_dash_setup_period(GF_DashClient *dash)
 				rep_i=0;
 			}
 		}
-//*/
+*/
 select_active_rep:
 		group->min_representation_bitrate = (u32) -1;
 		active_rep_found = GF_FALSE;
@@ -5072,6 +5211,8 @@ select_active_rep:
 			continue;
 		}
 
+//KK ADD CODE
+active_rep = 0;
 		rep_sel = gf_list_get(group->adaptation_set->representations, active_rep);
 
 		gf_dash_set_group_representation(group, rep_sel);
@@ -5766,13 +5907,17 @@ static Bool is_active_tile(GF_DASH_Group *dep_group, int idx)
 	cam_dir.z = global_cam_dir_z;
 #else
 	gf_mo_get_VPInfo(&cam_dir);
+//	printf("KK@L5769 cam_dir:%f %f %f\n", (float)cam_dir.x, (float)cam_dir.y, (float)cam_dir.z);	
 #endif
 	
-	float sinTheta = gf_vec_dot(dep_group->direction, cam_dir);
-	if( sinTheta>0.707)//0.25)
+#ifdef INTEGRATED_FACES
+	float cosTheta = gf_vec_dot(dep_group->direction, cam_dir);
+	if( cosTheta>0.707)//0.25)
 		return GF_TRUE;
 	else
 		return GF_FALSE;
+#endif
+	return GF_TRUE;
 }
 
 static DownloadGroupStatus dash_download_group(GF_DashClient *dash, GF_DASH_Group *group, GF_DASH_Group *base_group, Bool has_dep_following)
@@ -5793,6 +5938,7 @@ static DownloadGroupStatus dash_download_group(GF_DashClient *dash, GF_DASH_Grou
 			GF_DASH_Group *dep_group = gf_list_get(group->groups_depending_on, i);
 
 //*******************************KK ADD CODE ***
+#ifdef INTEGRATED_FACES
 			//Eliminate the inactive regions		
 			if(i !=0 && i!=count-1)
 			{
@@ -5801,7 +5947,7 @@ static DownloadGroupStatus dash_download_group(GF_DashClient *dash, GF_DASH_Grou
 			}
 			//让要下载的segment_index与global的max_seg_index即当前播放的最新时间段同步(解决全局tiles之间不同步的问题)
 			dep_group->download_segment_index = max_seg_index;  
-//*******************************KK CODE END ***
+#endif
 
 			if ((i+1==count) && !dep_group->groups_depending_on)
 				has_dep_following = GF_FALSE;
@@ -6928,6 +7074,12 @@ void gf_dash_set_algo(GF_DashClient *dash, GF_DASHAdaptationAlgorithm algo)
 {
 	dash->adaptation_algorithm = algo;
 	switch (dash->adaptation_algorithm) {
+//KK ADD CODE
+	case GF_DASH_ALGO_FOV_BASED:
+		dash->rate_adaptation_algo = dash_do_rate_adaptation_fov_based;
+		dash->rate_adaptation_download_monitor = dash_do_rate_monitor_default; //???? necessary??? it always returns GF_TRUE
+		break;
+//KK CODE END
 	case GF_DASH_ALGO_GPAC_LEGACY_BUFFER:
 		dash->rate_adaptation_algo = dash_do_rate_adaptation_legacy_buffer;
 		dash->rate_adaptation_download_monitor = dash_do_rate_monitor_default;
